@@ -119,53 +119,55 @@ const app = async () => {
         for (let i = 0; i < targetWebsites.length; i++) {
             try {
                 const targetWebsite = targetWebsites[i];
-                const proxy = proxies[i % proxies.length];
-                const { token } = data;
-                const { port, proxyUsername, proxyPassword, check } = await startProfile(token, proxy);
-                if (check) {
-                    const connect = `http://127.0.0.1:${port}`;
-                    let browser = null;
-                    try {
-                        browser = await puppeteer.connect({ browserURL: connect, defaultViewport: null });
-                        const page = await browser.newPage();
-                        await page.authenticate({
-                            username: proxyUsername,
-                            password: proxyPassword
-                        });
-                        const dimensions = await page.evaluate(() => {
-                            return {
-                                width: window.innerWidth,
-                                height: window.innerHeight
-                            };
-                        });
-                        console.log(dimensions);
-                        await page.goto(`http://${targetWebsite}`);
-                        await page.waitForFunction(() => {
-                            return document.readyState === 'complete';
-                        });
-                        const duration = getRandomInteger(10000, 60000);
-                        await waitForDefinedSeconds(duration);
-                        // move
-                        const numSteps = 50;
-                        for (let i = 0; i < numSteps; i++) {
-                            const randomX = Math.floor(Math.random() * dimensions.width);
-                            const randomY = Math.floor(Math.random() * dimensions.height);
-                            console.log(randomX, randomY);
-                            await page.mouse.move(randomX, randomY);
-                            await waitForDefinedSeconds(100);
-                        }
-                        await page.evaluate(() => {
-                            window.scrollBy(0, window.innerHeight);
-                        });
-                        await waitForDefinedSeconds(1000);
-                        await browser.close();
-                    } catch (error) {
-                        if (browser) {
+                for (let j = 0; j < proxies.length; j++) {
+                    const proxy = proxies[getRandomInteger(0, proxies.length - 1)];
+                    const { token } = data;
+                    const { port, proxyUsername, proxyPassword, check } = await startProfile(token, proxy);
+                    if (check) {
+                        const connect = `http://127.0.0.1:${port}`;
+                        let browser = null;
+                        try {
+                            browser = await puppeteer.connect({ browserURL: connect, defaultViewport: null });
+                            const page = await browser.newPage();
+                            await page.authenticate({
+                                username: proxyUsername,
+                                password: proxyPassword
+                            });
+                            const dimensions = await page.evaluate(() => {
+                                return {
+                                    width: window.innerWidth,
+                                    height: window.innerHeight
+                                };
+                            });
+                            await page.goto(`http://${targetWebsite}`);
+                            await page.waitForFunction(() => {
+                                return document.readyState === 'complete';
+                            });
+                            const duration = getRandomInteger(10000, 60000);
+                            await waitForDefinedSeconds(duration);
+                            // move
+                            const numSteps = 50;
+                            for (let i = 0; i < numSteps; i++) {
+                                const randomX = Math.floor(Math.random() * dimensions.width);
+                                const randomY = Math.floor(Math.random() * dimensions.height);
+                                console.log('Mouse is moving in the backgroud: ', randomX, randomY);
+                                await page.mouse.move(randomX, randomY);
+                                await waitForDefinedSeconds(100);
+                            }
+                            await page.evaluate(() => {
+                                window.scrollBy(0, window.innerHeight);
+                            });
+                            await waitForDefinedSeconds(1000);
                             await browser.close();
+                        } catch (error) {
+                            if (browser) {
+                                await browser.close();
+                            }
                         }
+                        break;
+                    } else {
+                        continue;
                     }
-                } else {
-                    continue;
                 }
             } catch (error) {
                 console.log('Next');
