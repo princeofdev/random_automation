@@ -9,7 +9,7 @@ const proxyList = './ProxyList.txt';
 
 const getRandomInteger = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-const waitForDefinedSeconds = async duration => await new Promise(resolve, setTimeout(resolve, duration));
+const waitForDefinedSeconds = async duration => await new Promise(resolve => setTimeout(resolve, duration));
 
 const readFileLines = async (filePath) => {
     try {
@@ -101,25 +101,10 @@ const startProfile = async (token, proxy) => {
         data: JSON.stringify(obj)
     }
     try {
-        const { status, data } = await axios(config);
-        const { message, http_code } = status;
-
-        if (message === 'browser profile failed to start') {
-            console.log('Try again after a minute..');
-            return { port: null, check: false };
-        } else if (message === 'proxy creation error' || message === "couldn't get proxy connection ip data") {
-            return { port: null, check: false };
-        } else if (message === "unauthorized") {
-            console.log("401 - Unauthorized, possibly too many requests or need a new token.");
-            return { port: null, check: false };
-        } else if (http_code !== 200) {
-            console.log(data);
-        } else {
-            const { data: { port } } = data;
-            return { port, check: true };
-        }
+        const { data: { data: { port } } } = await axios(config);
+        return { port, proxyUsername, proxyPassword, check: true };
     } catch (error) {
-        console.error(error.response.data);
+        console.log('Keep working...');
         return { port: null, check: false };
     }
 }
@@ -136,17 +121,54 @@ const app = async () => {
                 const targetWebsite = targetWebsites[i];
                 const proxy = proxies[i % proxies.length];
                 const { token } = data;
-                const { port, check } = await startProfile(token, proxy);
+                const { port, proxyUsername, proxyPassword, check } = await startProfile(token, proxy);
                 if (check) {
-                    const ws = `http://127.0.0.1:${port}`;
-                    const browser = await puppeteer.connect({ browserWSEndpoint: ws, defaultViewport: null });
-                    console.log(browser);
+                    const connect = `http://127.0.0.1:${port}`;
+                    let browser = null;
+                    try {
+                        browser = await puppeteer.connect({ browserURL: connect, defaultViewport: null });
+                        const page = await browser.newPage();
+                        await page.authenticate({
+                            username: proxyUsername,
+                            password: proxyPassword
+                        });
+                        const dimensions = await page.evaluate(() => {
+                            return {
+                                width: window.innerWidth,
+                                height: window.innerHeight
+                            };
+                        });
+                        console.log(dimensions);
+                        await page.goto(`http://${targetWebsite}`);
+                        await page.waitForFunction(() => {
+                            return document.readyState === 'complete';
+                        });
+                        const duration = getRandomInteger(10000, 60000);
+                        await waitForDefinedSeconds(duration);
+                        // move
+                        const numSteps = 50;
+                        for (let i = 0; i < numSteps; i++) {
+                            const randomX = Math.floor(Math.random() * dimensions.width);
+                            const randomY = Math.floor(Math.random() * dimensions.height);
+                            console.log(randomX, randomY);
+                            await page.mouse.move(randomX, randomY);
+                            await waitForDefinedSeconds(100);
+                        }
+                        await page.evaluate(() => {
+                            window.scrollBy(0, window.innerHeight);
+                        });
+                        await waitForDefinedSeconds(1000);
+                        await browser.close();
+                    } catch (error) {
+                        if (browser) {
+                            await browser.close();
+                        }
+                    }
                 } else {
-                    console.log('Proxy failed..');
                     continue;
                 }
             } catch (error) {
-                console.log(error);
+                console.log('Next');
             }
         }
     } else {
