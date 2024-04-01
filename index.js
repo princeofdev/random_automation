@@ -113,9 +113,9 @@ const startProfile = async (token, proxy) => {
             console.log("401 - Unauthorized, possibly too many requests or need a new token.");
             return { port: null, check: false };
         } else if (http_code !== 200) {
-            console.log(responseData);
+            console.log(data);
         } else {
-            const { port } = data;
+            const { data: { port } } = data;
             return { port, check: true };
         }
     } catch (error) {
